@@ -72,7 +72,7 @@ void GetXsSampleData(const string folder_path, int lable,
     GetImgNames(folder_path, image_names);
 
     // define hog descriptor 
-    cv::HOGDescriptor hog_des(Size(32, 32), Size(16, 16), Size(2, 2), Size(8, 8), 12);
+    cv::HOGDescriptor hog_des(Size(32, 32), Size(8, 8), Size(4, 4), Size(4, 4), 9);
 
     // read images and compute
     for (auto i = image_names.begin(); i != image_names.end(); i++) {
@@ -88,7 +88,7 @@ void GetXsSampleData(const string folder_path, int lable,
             t_mat.at<float>(0, j) = t_descrip_vec[j];
         }
         train_data.push_back(t_mat);
-        train_data_lables.push_back(lable);
+        train_data_lables.push_back(cv::Mat((cv::Mat_<float>(1, 2) << lable, 1-lable)));
     }
 }
 
@@ -104,56 +104,16 @@ int main(int argc, char const *argv[]) {
     GetXsSampleData(neg_root_path, NEG_LABLE, train_data, train_data_lables);
     cout<<train_data.size()<<' '<<train_data_lables.size()<<endl;
 
-#ifdef __WIN32 // mingw 只配了 opencv2
-    // 参数设置
-    CvSVMParams train_params;
-    train_params.svm_type = CvSVM::NU_SVR;
-    train_params.kernel_type = CvSVM::LINEAR;
-    train_params.degree = 0.5;
-    train_params.gamma = 1;
-    train_params.coef0 = 0.5;
-    train_params.C = 1;
-    train_params.nu = 0.5;
-    train_params.p = 0.5;
-    train_params.term_crit = cvTermCriteria(CV_TERMCRIT_ITER, 100000, 1e-7); // 训练终止条件
-
-    CvSVM trainer;
-    // trainer.train(train_data, train_data_lables, cv::Mat(), cv::Mat(), train_params);
-    // trainer.train()
-    begin = (double)getTickCount();
-    trainer.train_auto(train_data, train_data_lables, cv::Mat(), cv::Mat(), train_params);
-
-    // cout<<trainer.params.C<<trainer.params.nu<<endl;
-    
-    cout<<"train done"<<endl;
-    cout<<"train take time: "<<((double)getTickCount() - begin)/getTickFrequency()<<endl;
-    trainer.save("nu_svr_linear.xml");
-
+#ifdef __WIN32 
+    // define nn's structure
+    cv::Mat nn_structure =  (cv::Mat_<int>(1, 4) << 1764, 48, 24, 2);
+    CvANN_MLP trainer(nn_structure, CvANN_MLP::SIGMOID_SYM);
+    CvANN_MLP_TrainParams train_params;
+    trainer.train(train_data, train_data_lables, cv::Mat());
+    trainer.save("test.xml");
 #endif
 
 #ifdef __linux__
-
-    Ptr<cv::ml::SVM> trainer = cv::ml::SVM::create();
-    trainer->setType(cv::ml::SVM::Types::C_SVC);
-    trainer->setKernel(cv::ml::SVM::KernelTypes::RBF);
-    // trainer->setC(0.1);
- 
-	Ptr<cv::ml::TrainData> tdata = cv::ml::TrainData::create(train_data, cv::ml::ROW_SAMPLE, train_data_lables);
-    cv::ml::ParamGrid c_g(0.0001, 1000, 10);
-
-    begin = (double)getTickCount();
-    trainer->trainAuto(tdata, 10, c_g);
-    cout<<"train take time: "<<((double)getTickCount() - begin)/getTickFrequency()<<endl;
-	trainer->save("ball_rbf_auto_v5.xml");//保存
-    // rbf(弄错了..应该 默认的linear)
-    // auto, v2 是之前的参数, 进行了 data argumentation
-    // v3  hog stribe从(8,8)改为(2,2)
-    // v4  v3 + hog nbins从9改为12
-    // v5 同 v4 测试时间
-
-    // linear(真正的) 
-    // v1 参数是之前参数
-    // v2 hog 是rbf v4 参数, 重新进行了 data argumentation
 #endif
     return 0;
 }
